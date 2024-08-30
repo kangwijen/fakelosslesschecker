@@ -6,7 +6,9 @@ This project provides a Python-based tool for analyzing audio files to determine
 ## Installation
 To use this project, you need to install the required Python libraries. You can do this using pip:
 
-```pip install numpy librosa scipy colorama prettytable tqdm```
+```
+pip install librosa colorama prettytable tqdm
+```
 
 ## Usage
 1. Place the audio files you want to analyze in a folder.
