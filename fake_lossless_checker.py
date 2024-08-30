@@ -35,7 +35,7 @@ def detect(audio_path):
     return max_significant_freq
 
 table = pt.PrettyTable()
-table.field_names = ["Audio File", "Max Significant Frequency (Hz)", "Sample Rate (Hz)", "Verdict"]
+table.field_names = ["Audio File", "Sample Rate", "Significant Frequency", "Verdict"]
 
 folder_path = str(input("Enter the path to the folder containing the audio files: "))
 audio_files = [os.path.join(root, file) for root, dirs, files in os.walk(folder_path) for file in files if file.endswith(('.flac', '.wav'))]
@@ -51,26 +51,30 @@ for audio_file_path in tqdm(audio_files, desc="Processing Audio Files", unit="fi
         if file_sample_rate > 44100:
             if max_significant_freq < 22050:
                 verdict = colorama.Fore.RED + "Fake" + colorama.Style.RESET_ALL
-            elif max_significant_freq >= 22050 and max_significant_freq < (nyquist_freq * 0.80):
+            elif max_significant_freq >= 22050 and max_significant_freq < (nyquist_freq * 0.50):
                 verdict = colorama.Fore.RED + "Most likely Fake" + colorama.Style.RESET_ALL
-            elif max_significant_freq >= (nyquist_freq * 0.80) and max_significant_freq < (nyquist_freq * 0.95):
+            elif max_significant_freq >= (nyquist_freq * 0.50) and max_significant_freq < (nyquist_freq * 0.80):
+                verdict = colorama.Fore.YELLOW + "Might be Fake" + colorama.Style.RESET_ALL
+            elif max_significant_freq >= (nyquist_freq * 0.80) and max_significant_freq < (nyquist_freq * 0.90):
                 verdict = colorama.Fore.YELLOW + "Might be Authentic" + colorama.Style.RESET_ALL
-            elif max_significant_freq >= (nyquist_freq * 0.95) and max_significant_freq < (nyquist_freq * 0.99):
+            elif max_significant_freq >= (nyquist_freq * 0.90) and max_significant_freq < (nyquist_freq * 0.99):
                 verdict = colorama.Fore.GREEN + "Most likely Authentic" + colorama.Style.RESET_ALL
             elif max_significant_freq >= (nyquist_freq * 0.99):
                 verdict = colorama.Fore.GREEN + "Authentic" + colorama.Style.RESET_ALL
             else:
                 verdict = colorama.Fore.BLUE + "Can't Determine" + colorama.Style.RESET_ALL
         else:
-            if max_significant_freq < 19000:
+            if max_significant_freq < (22050 * 0.80):
                 verdict = colorama.Fore.RED + "Fake" + colorama.Style.RESET_ALL
-            elif max_significant_freq >= 19000 and max_significant_freq < 19500:
+            elif max_significant_freq >= (22050 * 0.80) and max_significant_freq < (22050 * 0.85):
                 verdict = colorama.Fore.RED + "Most likely Fake" + colorama.Style.RESET_ALL
-            elif max_significant_freq >= 19500 and max_significant_freq < 21000:
+            elif max_significant_freq >= (22050 * 0.85) and max_significant_freq < (22050 * 0.90):
+                verdict = colorama.Fore.YELLOW + "Might be Fake" + colorama.Style.RESET_ALL
+            elif max_significant_freq >= (22050 * 0.90) and max_significant_freq < (22050 * 0.95):
                 verdict = colorama.Fore.YELLOW + "Might be Authentic" + colorama.Style.RESET_ALL
-            elif max_significant_freq >= 21000 and max_significant_freq < 22000:
+            elif max_significant_freq >= (22050 * 0.95) and max_significant_freq < (22050 * 0.99):
                 verdict = colorama.Fore.GREEN + "Most likely Authentic" + colorama.Style.RESET_ALL
-            elif max_significant_freq >= 22000:
+            elif max_significant_freq >= (22050 * 0.99):
                 verdict = colorama.Fore.GREEN + "Authentic" + colorama.Style.RESET_ALL
             else:
                 verdict = colorama.Fore.BLUE + "Can't Determine" + colorama.Style.RESET_ALL
@@ -81,6 +85,7 @@ for audio_file_path in tqdm(audio_files, desc="Processing Audio Files", unit="fi
     max_significant_freq_str = colorama.Fore.CYAN + str(max_significant_freq) + colorama.Style.RESET_ALL if max_significant_freq != "N/A" else max_significant_freq
     file_sample_rate_str = colorama.Fore.CYAN + str(file_sample_rate) + colorama.Style.RESET_ALL
 
-    table.add_row([audio_file, max_significant_freq_str, file_sample_rate_str, verdict])
+    table.add_row([audio_file, file_sample_rate_str, max_significant_freq_str, verdict])
 
-print(table)
+sorted_table = table.get_string(sortby="Audio File")
+print(sorted_table)

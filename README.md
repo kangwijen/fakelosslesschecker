@@ -1,6 +1,4 @@
 # fakelosslesschecker
-Python tool to check for fake lossless audio files
-
 This project provides a Python-based tool for analyzing audio files to determine their authenticity based on their most significant frequencies. It leverages signal processing techniques to evaluate whether the audio files are likely to be authentic or fake by analyzing their frequency content.
 
 ## Installation
