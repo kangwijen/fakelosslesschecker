@@ -5,7 +5,7 @@ This project provides a Python-based tool for analyzing audio files to determine
 To use this project, you need to install the required Python libraries. You can do this using pip:
 
 ```
-pip install librosa colorama prettytable tqdm
+pip install librosa colorama prettytable tqdm pyloudnorm
 ```
 
 ## Usage
