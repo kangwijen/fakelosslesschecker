@@ -1,15 +1,27 @@
 # fakelosslesschecker
 This project provides a Python-based tool for analyzing audio files to determine their authenticity based on their most significant frequencies. It leverages signal processing techniques to evaluate whether the audio files are likely to be authentic or fake by analyzing their frequency content.
 
+There are 3 versions of this application:
+1. Base CLI - fake_lossless_checker.py
+2. Multithreaded CLI - fake_lossless_checker-mt.py
+3. Multithreaded GUI (WIP)
+
+If you're going to run this tool on Android, please use the base CLI as Android's Python doesn't support threading.
+
 ## Installation
-### On Computer
+### Running Executable
+#### On Windows
+Download the executable in [releases](https://github.com/kangwijen/fakelosslesschecker/releases) then run.
+
+### Running Python File
+#### On Computer
 To use this project on a computer, you need to install the required Python libraries. You can do this using pip:
 
 ```
 pip install librosa colorama prettytable tqdm pyloudnorm
 ```
 
-### On Android
+#### On Android
 To use this project on a computer, you need to install [Termux](https://github.com/termux/termux-app). Then you need to run these commands to install Python and the required libraries:
 
 ```
