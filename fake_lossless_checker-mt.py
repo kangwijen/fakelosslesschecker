@@ -215,6 +215,26 @@ def process_file(audio_file_path):
     return [audio_file, file_sample_rate_str, max_significant_freq_str, avg_peak, avg_rms, lufs, dynamic_range, verdict]
 
 def main():
+    logo = """
+
+$$$$$$$$\ $$\          $$$$$$\  $$\                           $$\                           
+$$  _____|$$ |        $$  __$$\ $$ |                          $$ |                          
+$$ |      $$ |        $$ /  \__|$$$$$$$\   $$$$$$\   $$$$$$$\ $$ |  $$\  $$$$$$\   $$$$$$\  
+$$$$$\    $$ |$$$$$$\ $$ |      $$  __$$\ $$  __$$\ $$  _____|$$ | $$  |$$  __$$\ $$  __$$\ 
+$$  __|   $$ |\______|$$ |      $$ |  $$ |$$$$$$$$ |$$ /      $$$$$$  / $$$$$$$$ |$$ |  \__|
+$$ |      $$ |        $$ |  $$\ $$ |  $$ |$$   ____|$$ |      $$  _$$<  $$   ____|$$ |      
+$$ |      $$$$$$$$\   \$$$$$$  |$$ |  $$ |\$$$$$$$\ \$$$$$$$\ $$ | \$$\ \$$$$$$$\ $$ |      
+\__|      \________|   \______/ \__|  \__| \_______| \_______|\__|  \__| \_______|\__|      
+                                                                                            
+
+Fake Lossless Checker v1.0 Made by @kangwijen
+https://github.com/kangwijen/fakelosslesschecker
+    """
+
+    os.system("cls" if os.name == "nt" else "clear")
+
+    print(logo)
+
     folder_path = str(input("Enter the path to the folder containing the audio files: "))
     audio_files = [os.path.join(root, file) for root, dirs, files in os.walk(folder_path) for file in files if file.endswith(('.flac', '.wav'))]
 
