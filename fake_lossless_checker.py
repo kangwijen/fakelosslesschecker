@@ -90,7 +90,7 @@ def detect(audio_path):
     std_db = np.std(smoothed_db)
     base_threshold = mean_db + 1.5 * std_db  
 
-    hf_threshold = 20
+    hf_threshold = 18
     db_thresholds = base_threshold - (hf_threshold * (freqs / np.max(freqs)))
 
     significant_freqs = []
