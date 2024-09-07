@@ -15,10 +15,10 @@ Download the executable in [releases](https://github.com/kangwijen/fakelosslessc
 
 ### Running Python File
 #### On Computer
-To use this project on a computer, you need to install the required Python libraries. You can do this using pip:
+To use this project on a computer, you need to install the required Python libraries. You can install it using requirements.txt
 
 ```
-pip install librosa colorama prettytable tqdm pyloudnorm
+pip install -r requirements.txt
 ```
 
 #### On Android
