@@ -5,9 +5,10 @@ import colorama
 import os
 import prettytable as pt
 from tqdm import tqdm
-import soundfile as sf
 import pyloudnorm as pyln
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+colorama.init()
 
 class TooShortError(Exception):
     pass
@@ -15,12 +16,16 @@ class TooShortError(Exception):
 class SilentTrackError(Exception):
     pass
 
+def _c(name, text):
+    colors = {"red": colorama.Fore.RED, "green": colorama.Fore.GREEN, "yellow": colorama.Fore.YELLOW, "blue": colorama.Fore.BLUE, "cyan": colorama.Fore.CYAN}
+    return (colors.get(name, "") + str(text) + colorama.Fore.RESET)
+
 def to_db(x):
     return round(20 * np.log10(x), 2)
 
-def get_dr(filename, floats=False):
-    audio, sr = librosa.load(filename, sr=None)
-
+def get_dr(filename=None, floats=False, audio=None, sr=None):
+    if audio is None or sr is None:
+        audio, sr = librosa.load(filename, sr=None)
     if audio.ndim == 1:
         audio = np.expand_dims(audio, axis=0)
 
@@ -79,9 +84,9 @@ def get_dr(filename, floats=False):
 
     return fdr, avg_peak, avg_rms, lufs
 
-def detect(audio_path):
-    y, sr = librosa.load(audio_path, sr=None)
-    
+def detect(audio_path=None, y=None, sr=None):
+    if y is None or sr is None:
+        y, sr = librosa.load(audio_path, sr=None)
     D = np.abs(librosa.stft(y))
     D_db = librosa.amplitude_to_db(D, ref=np.max)
     freqs = librosa.fft_frequencies(sr=sr)
@@ -107,112 +112,116 @@ def detect(audio_path):
 
     return max_significant_freq
 
+def _verdict_from_freq(file_sample_rate, nyquist_freq, max_significant_freq):
+    if max_significant_freq is None:
+        return _c("yellow", "Can't determine")
+    if file_sample_rate == 48000:
+        if max_significant_freq < 20000:
+            return _c("red", "Fake")
+        if max_significant_freq < nyquist_freq * 0.50:
+            return _c("red", "Most likely Fake")
+        if max_significant_freq < nyquist_freq * 0.80:
+            return _c("yellow", "Might be Fake")
+        if max_significant_freq < nyquist_freq * 0.90:
+            return _c("yellow", "Might be Authentic")
+        if max_significant_freq < nyquist_freq * 0.99:
+            return _c("green", "Most likely Authentic")
+        return _c("green", "Authentic")
+    if file_sample_rate > 48000:
+        if max_significant_freq < 22050:
+            return _c("red", "Fake")
+        if max_significant_freq < nyquist_freq * 0.50:
+            return _c("red", "Most likely Fake")
+        if max_significant_freq < nyquist_freq * 0.70:
+            return _c("yellow", "Might be Fake")
+        if max_significant_freq < nyquist_freq * 0.90:
+            return _c("yellow", "Might be Authentic")
+        if max_significant_freq < nyquist_freq * 0.99:
+            return _c("green", "Most likely Authentic")
+        return _c("green", "Authentic")
+    limit = 22050
+    if max_significant_freq < limit * 0.80:
+        return _c("red", "Fake")
+    if max_significant_freq < limit * 0.85:
+        return _c("red", "Most likely Fake")
+    if max_significant_freq < limit * 0.90:
+        return _c("yellow", "Might be Fake")
+    if max_significant_freq < limit * 0.95:
+        return _c("yellow", "Might be Authentic")
+    if max_significant_freq < limit * 0.99:
+        return _c("green", "Most likely Authentic")
+    return _c("green", "Authentic")
+
+def _format_metric_dr(val):
+    if not isinstance(val, (int, float)):
+        return val
+    if val < 8:
+        return _c("red", val)
+    if val < 12:
+        return _c("yellow", val)
+    return _c("green", val)
+
+def _format_metric_peak(val):
+    if not isinstance(val, (int, float)):
+        return val
+    if val > -2:
+        return _c("red", f"{val:.2f} dB")
+    if val > -4:
+        return _c("yellow", f"{val:.2f} dB")
+    return _c("green", f"{val:.2f} dB")
+
+def _format_metric_rms(val):
+    if not isinstance(val, (int, float)):
+        return val
+    if val > -6:
+        return _c("red", f"{val:.2f} dB")
+    if val > -9:
+        return _c("yellow", f"{val:.2f} dB")
+    return _c("green", f"{val:.2f} dB")
+
+def _format_metric_lufs(val):
+    if not isinstance(val, (int, float)):
+        return val
+    if val > -6:
+        return _c("red", f"{val:.2f} LUFS")
+    if val > -9:
+        return _c("yellow", f"{val:.2f} LUFS")
+    return _c("green", f"{val:.2f} LUFS")
+
 def process_file(audio_file_path):
     audio_file = os.path.basename(audio_file_path)
-    
-    max_significant_freq = detect(audio_file_path)
-    file_sample_rate = librosa.get_samplerate(audio_file_path)
-    nyquist_freq = file_sample_rate / 2
-
-    if max_significant_freq is not None:
-        if file_sample_rate == 48000:
-            if max_significant_freq < 20000:
-                verdict = colorama.Fore.RED + "Fake" + colorama.Fore.RESET
-            elif max_significant_freq >= 20000 and max_significant_freq < (nyquist_freq * 0.50):
-                verdict = colorama.Fore.RED + "Most likely Fake" + colorama.Fore.RESET
-            elif max_significant_freq >= (nyquist_freq * 0.50) and max_significant_freq < (nyquist_freq * 0.80):
-                verdict = colorama.Fore.YELLOW + "Might be Fake" + colorama.Fore.RESET
-            elif max_significant_freq >= (nyquist_freq * 0.80) and max_significant_freq < (nyquist_freq * 0.90):
-                verdict = colorama.Fore.YELLOW + "Might be Authentic" + colorama.Fore.RESET
-            elif max_significant_freq >= (nyquist_freq * 0.90) and max_significant_freq < (nyquist_freq * 0.99):
-                verdict = colorama.Fore.GREEN + "Most likely Authentic" + colorama.Fore.RESET
-            elif max_significant_freq >= (nyquist_freq * 0.99):
-                verdict = colorama.Fore.GREEN + "Authentic" + colorama.Fore.RESET
-            else:
-                verdict = colorama.Fore.BLUE + "Can't Determine" + colorama.Fore.RESET
-        elif file_sample_rate > 48000:
-            if max_significant_freq < 22050:
-                verdict = colorama.Fore.RED + "Fake" + colorama.Fore.RESET
-            elif max_significant_freq >= 22050 and max_significant_freq < (nyquist_freq * 0.50):
-                verdict = colorama.Fore.RED + "Most likely Fake" + colorama.Fore.RESET
-            elif max_significant_freq >= (nyquist_freq * 0.50) and max_significant_freq < (nyquist_freq * 0.70):
-                verdict = colorama.Fore.YELLOW + "Might be Fake" + colorama.Fore.RESET
-            elif max_significant_freq >= (nyquist_freq * 0.70) and max_significant_freq < (nyquist_freq * 0.90):
-                verdict = colorama.Fore.YELLOW + "Might be Authentic" + colorama.Fore.RESET
-            elif max_significant_freq >= (nyquist_freq * 0.90) and max_significant_freq < (nyquist_freq * 0.99):
-                verdict = colorama.Fore.GREEN + "Most likely Authentic" + colorama.Fore.RESET
-            elif max_significant_freq >= (nyquist_freq * 0.99):
-                verdict = colorama.Fore.GREEN + "Authentic" + colorama.Fore.RESET
-            else:
-                verdict = colorama.Fore.BLUE + "Can't Determine" + colorama.Fore.RESET
-        else:
-            if max_significant_freq < (22050 * 0.80):
-                verdict = colorama.Fore.RED + "Fake" + colorama.Fore.RESET
-            elif max_significant_freq >= (22050 * 0.80) and max_significant_freq < (22050 * 0.85):
-                verdict = colorama.Fore.RED + "Most likely Fake" + colorama.Fore.RESET
-            elif max_significant_freq >= (22050 * 0.85) and max_significant_freq < (22050 * 0.90):
-                verdict = colorama.Fore.YELLOW + "Might be Fake" + colorama.Fore.RESET
-            elif max_significant_freq >= (22050 * 0.90) and max_significant_freq < (22050 * 0.95):
-                verdict = colorama.Fore.YELLOW + "Might be Authentic" + colorama.Fore.RESET
-            elif max_significant_freq >= (22050 * 0.95) and max_significant_freq < (22050 * 0.99):
-                verdict = colorama.Fore.GREEN + "Most likely Authentic" + colorama.Fore.RESET
-            elif max_significant_freq >= (22050 * 0.99):
-                verdict = colorama.Fore.GREEN + "Authentic" + colorama.Fore.RESET
-            else:
-                verdict = colorama.Fore.BLUE + "Can't Determine" + colorama.Fore.RESET
-    else:
-        verdict = colorama.Fore.YELLOW + "Can't determine" + colorama.Fore.RESET
-        max_significant_freq = colorama.Fore.YELLOW + "N/A" + colorama.Fore.RESET
-
     try:
-        dynamic_range, avg_peak, avg_rms, lufs = get_dr(audio_file_path)
-    except TooShortError:
-        dynamic_range = colorama.Fore.RED + "Too Short" + colorama.Fore.RESET
-        avg_peak = colorama.Fore.YELLOW + "N/A" + colorama.Fore.RESET
-        avg_rms = colorama.Fore.YELLOW + "N/A" + colorama.Fore.RESET
-        lufs = colorama.Fore.YELLOW + "N/A" + colorama.Fore.RESET
-    except SilentTrackError:
-        dynamic_range = colorama.Fore.RED + "Silent Track" + colorama.Fore.RESET
-        avg_peak = colorama.Fore.YELLOW + "N/A" + colorama.Fore.RESET
-        avg_rms = colorama.Fore.YELLOW + "N/A" + colorama.Fore.RESET
-        lufs = colorama.Fore.YELLOW + "N/A" + colorama.Fore.RESET
-
-    if isinstance(dynamic_range, (int, float)):
-        if dynamic_range < 8:
-            dynamic_range = colorama.Fore.RED + str(dynamic_range) + colorama.Fore.RESET
-        elif dynamic_range >= 8 and dynamic_range < 12:
-            dynamic_range = colorama.Fore.YELLOW + str(dynamic_range) + colorama.Fore.RESET
-        elif dynamic_range >= 12:
-            dynamic_range = colorama.Fore.GREEN + str(dynamic_range) + colorama.Fore.RESET
-
-    if isinstance(avg_peak, (int, float)):
-        if avg_peak > -2:
-            avg_peak = colorama.Fore.RED + f"{avg_peak:.2f} dB" + colorama.Fore.RESET
-        elif -4 <= avg_peak <= -2:
-            avg_peak = colorama.Fore.YELLOW + f"{avg_peak:.2f} dB" + colorama.Fore.RESET
+        audio, file_sample_rate = librosa.load(audio_file_path, sr=None, mono=False)
+        if audio.ndim == 1:
+            audio = np.expand_dims(audio, axis=0)
+        y = np.mean(audio, axis=0)
+        max_significant_freq = detect(y=y, sr=file_sample_rate)
+        nyquist_freq = file_sample_rate / 2
+        verdict = _verdict_from_freq(file_sample_rate, nyquist_freq, max_significant_freq)
+        if max_significant_freq is None:
+            max_significant_freq = _c("yellow", "N/A")
         else:
-            avg_peak = colorama.Fore.GREEN + f"{avg_peak:.2f} dB" + colorama.Fore.RESET
+            max_significant_freq = _c("cyan", str(max_significant_freq))
 
-    if isinstance(avg_rms, (int, float)):
-        if avg_rms > -6:
-            avg_rms = colorama.Fore.RED + f"{avg_rms:.2f} dB" + colorama.Fore.RESET
-        elif -9 <= avg_rms <= -6:
-            avg_rms = colorama.Fore.YELLOW + f"{avg_rms:.2f} dB" + colorama.Fore.RESET
-        else:
-            avg_rms = colorama.Fore.GREEN + f"{avg_rms:.2f} dB" + colorama.Fore.RESET
+        try:
+            dynamic_range, avg_peak, avg_rms, lufs = get_dr(audio=audio, sr=file_sample_rate)
+        except TooShortError:
+            dynamic_range = _c("red", "Too Short")
+            avg_peak = avg_rms = lufs = _c("yellow", "N/A")
+        except SilentTrackError:
+            dynamic_range = _c("red", "Silent Track")
+            avg_peak = avg_rms = lufs = _c("yellow", "N/A")
 
-    if isinstance(lufs, (int, float)):
-        if lufs > -6:
-            lufs = colorama.Fore.RED + f"{lufs:.2f} LUFS" + colorama.Fore.RESET
-        elif -9 <= lufs <= -6:
-            lufs = colorama.Fore.YELLOW + f"{lufs:.2f} LUFS" + colorama.Fore.RESET
-        else:
-            lufs = colorama.Fore.GREEN + f"{lufs:.2f} LUFS" + colorama.Fore.RESET
-
-    max_significant_freq_str = colorama.Fore.CYAN + str(max_significant_freq) + colorama.Fore.RESET if max_significant_freq != "N/A" else max_significant_freq
-    file_sample_rate_str = colorama.Fore.CYAN + str(file_sample_rate) + colorama.Fore.RESET
-
-    return [audio_file, file_sample_rate_str, max_significant_freq_str, avg_peak, avg_rms, lufs, dynamic_range, verdict]
+        dynamic_range = _format_metric_dr(dynamic_range)
+        avg_peak = _format_metric_peak(avg_peak)
+        avg_rms = _format_metric_rms(avg_rms)
+        lufs = _format_metric_lufs(lufs)
+        file_sample_rate_str = _c("cyan", str(file_sample_rate))
+        return [audio_file, file_sample_rate_str, max_significant_freq, avg_peak, avg_rms, lufs, dynamic_range, verdict]
+    except Exception as e:
+        na = _c("yellow", "N/A")
+        err = _c("red", str(e)[:40])
+        return [audio_file, na, na, na, na, na, na, err]
 
 def main():
     logo = """
@@ -235,13 +244,20 @@ https://github.com/kangwijen/fakelosslesschecker
 
     print(logo)
 
-    folder_path = str(input("Enter the path to the folder containing the audio files: "))
+    folder_path = str(input("Enter the path to the folder containing the audio files: ")).strip()
+    if not folder_path or not os.path.isdir(folder_path):
+        print("Error: path does not exist or is not a directory.")
+        return
     audio_files = [os.path.join(root, file) for root, dirs, files in os.walk(folder_path) for file in files if file.endswith(('.flac', '.wav'))]
+    if not audio_files:
+        print("No .flac or .wav files found in that folder.")
+        return
 
     table = pt.PrettyTable()
     table.field_names = ["File", "Sample Rate", "Max Freq", "Avg Peak", "Avg RMS", "LUFS", "Dynamic Range", "Verdict"]
 
-    with ThreadPoolExecutor() as executor:
+    max_workers = min(32, (os.cpu_count() or 1) + 4)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(process_file, audio_file_path) for audio_file_path in audio_files]
 
         for future in tqdm(as_completed(futures), total=len(audio_files), desc="Processing Audio Files", unit="file"):
